@@ -1,0 +1,29 @@
+# Architecture
+arch: WideResNet34_2_BinAct
+
+# ===== Dataset ===== #
+data: /mnt/disk1/datasets
+set: ImageNet
+
+# ===== Learning Rate Policy ======== #
+optimizer: adam
+lr: 0.0002
+
+# ===== Network training config ===== #
+epochs: 120
+weight_decay: 0.000030517578125
+batch_size: 256
+label_smoothing: 0.1
+
+# ===== Sparsity =========== #
+conv_type: SubnetConv
+bn_type: NonAffineBatchNorm
+freeze_weights: True
+prune_rate: -1 # Override
+init: kaiming_normal
+mode: fan_in
+nonlinearity: relu # Binary Activation Function
+scale_fan: True
+
+# ===== Hardware setup ===== #
+workers: 20

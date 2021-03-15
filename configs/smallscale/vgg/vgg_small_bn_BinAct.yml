@@ -1,0 +1,31 @@
+# Architecture
+arch: VGG_Small_bn_BinAct
+
+# ===== Dataset ===== #
+data: /mnt
+set: CIFAR10
+name: vgg_small_bn_BinAct_kn_unsigned
+
+# ===== Learning Rate Policy ======== #
+optimizer: adam
+lr: 0.1
+lr_policy: cosine_lr
+
+# ===== Network training config ===== #
+epochs: 100
+weight_decay: 0.0001
+momentum: 0.9
+batch_size: 128
+width_mult: 10
+
+# ===== Sparsity =========== #
+conv_type: SubnetConv
+bn_type: AffineBatchNorm
+freeze_weights: True
+prune_rate: -1
+init: kaiming_normal
+scale_fan: True
+
+# ===== Hardware setup ===== #
+workers: 4
+ 
