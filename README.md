@@ -15,7 +15,7 @@ More extensive details and motivation can be found in the following paper:
 ## Setup
 
 ### Quick Setup
-Use the `birpop.yml` file to create a conda environment in which to run biprop.
+Use the `biprop.yml` file to create a conda environment in which to run biprop.
 
 ### Alternative Setup
 1. Create a conda environment with python 3.7.4.
@@ -53,6 +53,8 @@ Additionally, embedded in each configuration file name is the initialization use
 (u)sc -> (unscaled) signed constant
 (u)kn -> (unscaled) kaiming normal
 ```
+
+If ```affine``` is in the configuration filename, it indicates a batchnorm configuration with trainable parameters. Batchnorm training can be turned on with the --learn_batchnorm flag. 
 
 ### Example Run
 Below is a sample call to identify a MPT-1/1 within the Conv4 network that has binarized 20% of the original weights and pruned the remaining 80%. In this call, a MPT-1/1 will be identified using two GPUs on a single node with the network weights initialized using a scaled Kaiming normal initialization:
@@ -94,7 +96,8 @@ Below we state the best performing MPT-1/32 networks for ImageNet on various net
 | MPT-1/1 +BN | WideResNet-34  |  19.3M  | 60% | Kaiming Normal | 52.07% |
 
 
-To use a pretrained model use the ```--pretrained=<path/to/pretrained-checkpoint>``` flag. Pretrained ImageNet models are provided in the `pretrained` directory.
+To use a pretrained model use the ```--pretrained=<path/to/pretrained-checkpoint>``` flag. Pretrained models are provided in the `pretrained` directory.
+To evaluate a pretrained model on the test dataset, add the ```--evaluate``` flag.
 
 ### Tracking
 

@@ -89,25 +89,23 @@ def freeze_model_weights(model):
 
 def get_params(model):
     weights = []
-    biases = [0]
+    biases = []
     scores = []
     weights_grad = []
     scores_grad = []
     for n,m in model.named_modules():
         if hasattr(m, "weight") and m.weight is not None:
-            print (n," WEIGHTS: ", torch.isnan(m.weight).any())
             weights.extend(m.weight.tolist())
             if m.weight.grad is not None:
                 weights_grad.extend(m.weight.grad.tolist())
         if hasattr(m, "bias") and m.bias is not None:
             biases.extend(m.bias.tolist())
         if hasattr(m, "scores") and m.scores is not None:
-            print (n," SCORES: ", torch.isnan(m.scores).any())
             scores.extend(m.scores.tolist())
             if m.scores.grad is not None:
                 scores_grad.extend(m.scores.grad.tolist())
 
-    return weights,biases, scores, weights_grad, scores_grad
+    return weights, biases, scores, weights_grad, scores_grad
 
 def freeze_model_subnet(model):
     print("=> Freezing model subnet")
