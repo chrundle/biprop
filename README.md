@@ -8,9 +8,11 @@
 2. *Do not require any further training to achieve prize 1 (Prize 2)*
 3. *Is robust to extreme forms of quantization (i.e., binary weights and/or activation) (Prize 3)*
 
-More extensive details and motivation can be found in the following paper:
+More extensive details and motivation can be found in our ICLR 2021 paper:
 
 [**Multi-Prize Lottery Ticket Hypothesis: Finding Generalizable and Efficient Binary Subnetworks in a Randomly Weighted Neural Network**](https://openreview.net/forum?id=U_mat0b9iv)
+
+This implementation of **biprop** was built on top of the [**hidden-networks**](https://github.com/allenai/hidden-networks) repository from the Allen Institute for AI. 
 
 ## Setup
 
