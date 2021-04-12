@@ -75,13 +75,18 @@ class GetQuantnet_binary(autograd.Function):
         num_unpruned = int(k * scores.numel()) # Number of unpruned weights
         alpha = torch.sum(q_weight) / num_unpruned # Compute alpha = || q_weight ||_1 / (number of unpruned weights)
 
+        # Save absolute value of weights for backward
+        ctx.save_for_backward(abs_wgt)
+
         # Return pruning mask with gain term alpha for binary weights
         return alpha * out
 
     @staticmethod
     def backward(ctx, g):
-        # send the gradient g straight-through on the backward pass.
-        return g, None, None
+        # Get absolute value of weights from saved ctx
+        abs_wgt, = ctx.saved_tensors
+        # send the gradient g times abs_wgt on the backward pass
+        return g * abs_wgt, None, None
 
 class SubnetConv(nn.Conv2d):
     def __init__(self, *args, **kwargs):
