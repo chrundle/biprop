@@ -67,7 +67,7 @@ def main_worker(args):
         pretrained(args, model)
 
     optimizer = get_optimizer(args, model)
-    data = get_dataset(args)
+    data, train_augmentation = get_dataset(args)
     lr_policy = get_policy(args.lr_policy)(optimizer, args)
 
     if args.label_smoothing is None:
@@ -126,6 +126,9 @@ def main_worker(args):
             "best_train_acc5": best_train_acc5,
             "optimizer": optimizer.state_dict(),
             "curr_acc1": acc1 if acc1 else "Not evaluated",
+            "conv_type": args.conv_type,
+            "prune_rate": args.prune_rate,
+            "train_augmentation": train_augmentation,
         },
         False,
         filename=ckpt_base_dir / f"initial.state",
@@ -196,6 +199,9 @@ def main_worker(args):
                     "optimizer": optimizer.state_dict(),
                     "curr_acc1": acc1,
                     "curr_acc5": acc5,
+                    "conv_type": args.conv_type,
+                    "prune_rate": args.prune_rate,
+                    "train_augmentation": train_augmentation,
                 },
                 is_best,
                 filename=ckpt_base_dir / f"epoch_most_recent.state",
@@ -214,6 +220,9 @@ def main_worker(args):
                     "optimizer": optimizer.state_dict(),
                     "curr_acc1": acc1,
                     "curr_acc5": acc5,
+                    "conv_type": args.conv_type,
+                    "prune_rate": args.prune_rate,
+                    "train_augmentation": train_augmentation,
                 },
                 is_best,
                 filename=ckpt_base_dir / f"epoch_{epoch}.state",
@@ -363,10 +372,23 @@ def pretrained(args, model):
 
 
 def get_dataset(args):
+    train_augmentation = 'Default'
+    # Check if gaussian augmenation is being used
+    if args.gaussian_aug:
+      # Add _gaussian to args.set
+      args.set = args.set + '_gaussian'
+      # Set train augmentation to gaussian for logging purposes
+      train_augmentation = 'Gaussian'
+    # Check if augmix is being used
+    elif args.augmix:
+      # Add _augmix to args.set
+      args.set = args.set + '_augmix'
+      # Set train augmentation to augmix for logging purposes
+      train_augmentation = 'Augmix'
     print(f"=> Getting {args.set} dataset")
     dataset = getattr(data, args.set)(args)
 
-    return dataset
+    return dataset, train_augmentation
 
 
 def get_model(args):

@@ -1,12 +1,13 @@
 import time
 import torch
 import tqdm
+import torch.nn.functional as F
 
 from utils.eval_utils import accuracy
 from utils.logging import AverageMeter, ProgressMeter
 
-
 __all__ = ["train", "validate", "modifier"]
+
 
 # Set threshold for score value to enforce global pruning across network layers
 def global_prune_threshold(model, args):
@@ -41,7 +42,6 @@ def global_prune_threshold(model, args):
     # Exit function
     return
 
-
 def train(train_loader, model, criterion, optimizer, epoch, args, writer):
     batch_time = AverageMeter("Time", ":6.3f")
     data_time = AverageMeter("Data", ":6.3f")
@@ -67,9 +67,12 @@ def train(train_loader, model, criterion, optimizer, epoch, args, writer):
         data_time.update(time.time() - end)
 
         if args.gpu is not None:
+          if args.jsd:
+            images_all = torch.cat(images, 0).cuda(args.gpu, non_blocking=True)
+          else:
             images = images.cuda(args.gpu, non_blocking=True)
 
-        target = target.cuda(args.gpu, non_blocking=True)
+          target = target.cuda(args.gpu, non_blocking=True)
 
         # Write scores and weights to tensorboard at beginning of every other epoch
         if args.histograms:
@@ -87,16 +90,38 @@ def train(train_loader, model, criterion, optimizer, epoch, args, writer):
           # Set prune_threshold for all layers in model
           global_prune_threshold(model, args)
 
-        # compute output
-        output = model(images)
+        # compute loss without Jensen-Shannon divergence
+        if args.jsd == False:
+          output = model(images)
 
-        loss = criterion(output, target)
+          loss = criterion(output, target)
 
-        # measure accuracy and record loss
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
-        losses.update(loss.item(), images.size(0))
-        top1.update(acc1.item(), images.size(0))
-        top5.update(acc5.item(), images.size(0))
+          # measure accuracy and record loss
+          acc1, acc5 = accuracy(output, target, topk=(1, 5))
+          losses.update(loss.item(), images.size(0))
+          top1.update(acc1.item(), images.size(0))
+          top5.update(acc5.item(), images.size(0))
+
+        else: # compute loss with Jensen-Shannon divergence
+          logits_all = model(images_all)
+          logits_clean, logits_aug1, logits_aug2 = torch.split(logits_all, images[0].size(0))
+          output = logits_clean # This is just used for accuracy function
+
+          # Cross-entropy is only computed on clean images
+          loss = criterion(logits_clean, target)
+
+          # Terms for Jensen-Shannon divergence
+          p_clean, p_aug1, p_aug2 = F.softmax(logits_clean, dim=1), F.softmax(logits_aug1, dim=1), F.softmax(logits_aug2, dim=1)
+
+          # Clamp mixture distribution to avoid exploding KL divergence
+          p_mixture = torch.clamp((p_clean + p_aug1 + p_aug2) / 3., 1e-7, 1).log()
+          loss += 12 * (F.kl_div(p_mixture, p_clean, reduction='batchmean') + F.kl_div(p_mixture, p_aug1, reduction='batchmean') + F.kl_div(p_mixture, p_aug2, reduction='batchmean')) / 3.
+
+          # measure accuracy and record loss
+          acc1, acc5 = accuracy(logits_clean, target, topk=(1, 5))
+          losses.update(loss.item(), images[0].size(0))
+          top1.update(acc1.item(), images[0].size(0))
+          top5.update(acc5.item(), images[0].size(0))
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -188,7 +213,7 @@ def validate(val_loader, model, criterion, args, writer, epoch):
             if args.gpu is not None:
                 images = images.cuda(args.gpu, non_blocking=True)
 
-            target = target.cuda(args.gpu, non_blocking=True)
+                target = target.cuda(args.gpu, non_blocking=True)
 
             # Check if global pruning is being used
             if args.conv_type == "GlobalSubnetConv":

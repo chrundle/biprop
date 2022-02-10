@@ -1,6 +1,8 @@
 import argparse
 import sys
 import yaml
+import os
+import torch
 
 from configs import parser as _parser
 
@@ -286,6 +288,31 @@ def parse_arguments():
         type=int, 
         help="When pruning globally, scale up prune rate over this number of epochs"
     )
+    parser.add_argument("--gaussian_aug", action="store_true", default=False, help="Gaussian noise augmentation to be added to the images")
+    parser.add_argument("--std_gauss", help="Variance of sampled Gaussian noise for augmentation scheme", default=0.1, type=float)
+    parser.add_argument("--p_clean", help="Fraction of clean data in gaussian augmentation scheme", default=1.0, type=float)
+    parser.add_argument("--augmix", action="store_true", default=False, help="Use Augmix during training")
+    parser.add_argument(
+        "--jsd", action="store_true", default=False, help="Use Jensen-Shannon Divergence in loss with Augmix/Gaussian augmentation schemes"
+    )
+    parser.add_argument(
+        "--all-augmix-augmentations", action="store_true", default=False, help="Use all Augmix augmentations when true (not recommended)"
+    )
+    parser.add_argument(
+        '--mixture-width',
+        default=3,
+        type=int,
+        help='Number of augmentation chains to mix per augmented example')
+    parser.add_argument(
+        '--mixture-depth',
+        default=-1,
+        type=int,
+        help='Depth of augmentation chains. -1 denotes stochastic depth in [1, 3]')
+    parser.add_argument(
+        '--aug-severity',
+        default=3,
+        type=int,
+        help='Severity of base augmentation operators')
 
     # Updated for use with hpbandster
     #args = parser.parse_args()
@@ -298,6 +325,29 @@ def parse_arguments():
     # Allow for use from notebook without config file
     if len(sys.argv) > 1:
         get_config(args, unknown)
+
+    # If pretrained model provided, check conv_type to set before building from config
+    if args.pretrained:
+      if os.path.isfile(args.pretrained):
+        print("=> checking conv_type of pretrained model from '{}'".format(args.pretrained))
+        pretrained_dict = torch.load(
+            args.pretrained,
+            map_location=torch.device("cuda:{}".format(args.multigpu[0])),
+        )
+        try:
+          # Set conv_type argument to conv_type of pretrained model
+          args.conv_type = pretrained_dict["conv_type"]
+        except:
+          print("=== WARNING: Pretrained model file does not contain 'conv_type' key. ===")
+          print("=== WARNING: This may result in incorrect model being loaded. ===")
+          print("=== SOLUTION: Either pass the conv_type used when training the model in arguments using the --conv-type flag or ensure that the correct conv_type is listed in the provided config file.")
+        try:
+          # Set prune_rate argument to prune_rate of pretrained model
+          args.prune_rate = pretrained_dict["prune_rate"]
+        except:
+          print("=== WARNING: Pretrained model file does not contain 'prune_rate' key. ===")
+          print("=== WARNING: This may result in incorrect model being loaded. ===")
+          print("=== SOLUTION: Either pass the prune_rate used when training the model in arguments using the --prune-rate flag or ensure that the correct prune_rate is listed in the provided config file.")
 
     return args
 

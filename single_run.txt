@@ -3,7 +3,7 @@ python main.py --config configs/smallscale/conv6/conv6_kn_unsigned.yml \
                --multigpu 0 \
                --name example-run \
                --data /g/g14/chrundle/datasets/cifar-10-batches-py \
-               --prune-rate 0.5
+               --prune-rate 0.3
 
 # Global Pruning - Add flag to specify conv type should be GlobalSubnetConv
 python main.py --config configs/smallscale/conv6/conv6_kn_unsigned.yml \
@@ -11,4 +11,4 @@ python main.py --config configs/smallscale/conv6/conv6_kn_unsigned.yml \
                --multigpu 0 \
                --name example-run \
                --data /g/g14/chrundle/datasets/cifar-10-batches-py \
-               --prune-rate 0.5
+               --prune-rate 0.2
