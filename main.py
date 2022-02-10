@@ -24,6 +24,7 @@ from utils.net_utils import (
     LabelSmoothing,
 )
 from utils.schedulers import get_policy
+from utils.conv_type import GetGlobalSubnet
 
 
 from args import args
@@ -131,9 +132,24 @@ def main_worker(args):
         save=False,
     )
 
+    # Set final_prune_rate for gradually increasing pruning rate in global pruning
+    final_prune_rate = args.prune_rate
+
     # Start training
     # torch.cuda.empty_cache()
     for epoch in range(args.start_epoch, args.epochs):
+
+        # If using global pruning, gradually increase pruning rate to avoid layer collapse
+        if args.conv_type == "GlobalSubnetConv" and epoch < args.prune_rate_epoch:
+          if args.prune_rate <= 0.5:
+             prune_decay = (1 - (epoch/args.prune_rate_epoch))**3
+             curr_prune_rate = (1-final_prune_rate) + ((0.5 - (1-final_prune_rate))*prune_decay)
+             args.prune_rate = (1-curr_prune_rate)
+             print("args.prune_rate = ", args.prune_rate)
+        elif args.conv_type == "GlobalSubnetConv" and epoch == args.prune_rate_epoch:
+          args.prune_rate = final_prune_rate
+          print("args.prune_rate = ", args.prune_rate)
+
 
         lr_policy(epoch, iteration=None)
         modifier(args, epoch, model)
@@ -237,6 +253,13 @@ def main_worker(args):
         end_epoch = time.time()
         #print("EPOCH TIME: ", end_epoch-start_train)
         #torch.cuda.empty_cache()
+
+    # Finalize prune rate for globally pruned networks
+    if args.conv_type == "GlobalSubnetConv":
+      global_pr = global_prune_rate(model, args)
+    else:
+      # For layerwise pruning, global prune rate is layer prune rate
+      global_pr = args.prune_rate
 
     #print("BEST ACC 1: ", best_acc1)
     write_result_to_csv(
@@ -503,6 +526,47 @@ def write_result_to_csv(**kwargs):
                 "{run_base_dir}\n"
             ).format(now=now, **kwargs)
         )
+
+# Compute global prune rate at end of training
+def global_prune_rate(model, args):
+    # Print breakdown of prune rate by layer
+    print("\n==> Final layerwise prune rates in network:")
+    # Loop over all model parameters and compute percentage of weights pruned globally
+    total_weights = 0
+    unpruned_weights = 0
+    # Loop over all model parameters to get sparsity of each layer
+    for n, m in model.named_modules():
+      # Only add parameters that have prune_threshold as attribute
+      if hasattr(m,'prune_threshold'):
+        tmp_scores = m.clamped_scores.clone().detach()
+        # Add to total_weights
+        layer_total = int(torch.numel(tmp_scores))
+        #print("Total number of weights in layer = ", t)
+        total_weights += layer_total
+        # Compute layer prune rate (doesn't seem to be stored correctly during multigpu runs)
+        w = GetGlobalSubnet.apply(tmp_scores, m.weight.detach().clone(), m.prune_threshold)
+        # Compute number of unpruned weights in layer
+        layer_unpruned = torch.count_nonzero(w).item()
+        # Compute pruning rate for current layer
+        layer_prune_rate = 1 - (layer_unpruned/layer_total)
+        # Compute number of pruned weights
+        print("%s prune percentage: %lg" %(n,100*layer_prune_rate))
+        unpruned_weights += layer_unpruned
+        # Set prune threshold value (same for all layers)
+        pr_thresh = m.prune_threshold
+
+    # Compute global pruning percentage
+    #print ("total_weights = ", total_weights)
+    #print ("pruned_weights = ", unpruned_weights)
+    final_prune_rate = (1 - (unpruned_weights/total_weights))
+    #print("Global pruning percentage: ", 100 * final_prune_rate)
+    print("\n==> Global prune rate: ", 1-final_prune_rate)
+
+    #print("\n==> Final prune threshold value: ", pr_thresh)
+
+    # Return global prune rate
+    return (1-final_prune_rate)
+
 
 
 if __name__ == "__main__":

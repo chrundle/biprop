@@ -8,6 +8,39 @@ from utils.logging import AverageMeter, ProgressMeter
 
 __all__ = ["train", "validate", "modifier"]
 
+# Set threshold for score value to enforce global pruning across network layers
+def global_prune_threshold(model, args):
+    # Loop over all model parameters and concat flattened score tensors
+    # Initialize list for storing parameters with scores
+    p_list = []
+    # Loop over all model parameters to extract scores
+    for n, m in model.named_modules():
+      # Only add parameters that have scores as attributes
+      if hasattr(m,'scores'):
+        # Add flattened clone of scores.abs() to p_list
+        p_list.append(m.scores.clone().abs().flatten())
+
+    # Concatenate flattened clones
+    z = torch.cat(p_list)
+    # Sort z
+    z,_ = z.sort()
+    # Determine number of elements to prune
+    p_idx = int((1-args.prune_rate) * z.numel())
+    # Identify prune_threshold for values in bottom 
+    # (1-args.prune_rate) percent of scores
+    prune_threshold = z[p_idx-1]
+    #print("prune_threshold = ", prune_threshold)
+
+    # Loop over all model parameters to update prune_threshold
+    for n, m in model.named_modules():
+      # Only add parameters that have scores as attributes
+      if hasattr(m,'scores'):
+        # Pass prune_threshold value to model parameters
+        m.set_prune_threshold(prune_threshold)
+
+    # Exit function
+    return
+
 
 def train(train_loader, model, criterion, optimizer, epoch, args, writer):
     batch_time = AverageMeter("Time", ":6.3f")
@@ -48,6 +81,11 @@ def train(train_loader, model, criterion, optimizer, epoch, args, writer):
               #if 'score' in param_name or 'weight' in param_name:
                 #print(param_name, model.state_dict()[param_name])
                 writer.add_histogram(param_name, model.state_dict()[param_name], epoch)
+
+        # Check if global pruning is being used
+        if args.conv_type == "GlobalSubnetConv":
+          # Set prune_threshold for all layers in model
+          global_prune_threshold(model, args)
 
         # compute output
         output = model(images)
@@ -151,6 +189,11 @@ def validate(val_loader, model, criterion, args, writer, epoch):
                 images = images.cuda(args.gpu, non_blocking=True)
 
             target = target.cuda(args.gpu, non_blocking=True)
+
+            # Check if global pruning is being used
+            if args.conv_type == "GlobalSubnetConv":
+              # Set prune_threshold for all layers in model
+              global_prune_threshold(model, args)
 
             # compute output
             output = model(images)

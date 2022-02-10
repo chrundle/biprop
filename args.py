@@ -280,6 +280,12 @@ def parse_arguments():
         default=None,
         help="Sample Baseline Subnet Init",
     )
+    parser.add_argument(
+        "--prune_rate_epoch", 
+        default=10, 
+        type=int, 
+        help="When pruning globally, scale up prune rate over this number of epochs"
+    )
 
     # Updated for use with hpbandster
     #args = parser.parse_args()

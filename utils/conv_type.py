@@ -120,6 +120,81 @@ class SubnetConv(nn.Conv2d):
         return x
 
 
+class GetGlobalSubnet(autograd.Function):
+    @staticmethod
+    def forward(ctx, scores, weights, prune_threshold):
+        # Get pruning mask by setting all values below 
+        # prune_threshold to 0 and all others to 1
+        out = scores.clone()
+        # To work in multigpu setup, need to ensure prune_threshold is on same device as output
+        cond = out>prune_threshold.to(out.device)
+        cond = cond.to(out.device)
+        zero = torch.as_tensor(0.0, device = out.device)
+        one = torch.as_tensor(1.0, device = out.device)
+        # Only keep weights that are above threshold (in absolute value)
+        out = torch.where(cond, one, zero)
+
+        # Perform binary quantization of weights
+        abs_wgt = torch.abs(weights.clone()) # Absolute value of original weights
+        q_weight = abs_wgt * out # Remove pruned weights
+        num_unpruned = int(torch.sum(out)) # Number of unpruned weights
+        # If fewer than 1% of weights remain then print percentage of weights
+        if (num_unpruned/out.numel()<0.0001):
+          print("Percentage of unpruned weights =", num_unpruned/out.numel()) 
+        alpha = torch.sum(q_weight) / num_unpruned # Compute alpha = || q_weight ||_1 / (number of unpruned weights)
+
+        # Save absolute value of weights for backward
+        ctx.save_for_backward(abs_wgt)
+
+        # Return pruning mask with gain term alpha for binary weights
+        return alpha * out
+
+    @staticmethod
+    def backward(ctx, g):
+        # Get absolute value of weights from saved ctx
+        abs_wgt, = ctx.saved_tensors
+        # send the gradient g times abs_wgt on the backward pass.
+        return g * abs_wgt, None, None
+
+
+class GlobalSubnetConv(nn.Conv2d):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.scores = nn.Parameter(torch.Tensor(self.weight.size()))
+        nn.init.kaiming_uniform_(self.scores, a=math.sqrt(5))
+      #  print ("subnet conv init: ", torch.isnan(self.scores).any())
+
+    def set_prune_rate(self, prune_rate):
+        self.prune_rate = prune_rate
+
+    def set_prune_threshold(self, prune_threshold):
+        self.prune_threshold = prune_threshold
+
+    @property
+    def clamped_scores(self):
+        # For unquantized activations
+        return self.scores.abs()
+
+    def forward(self, x):
+        # For debugging gradients, prints out maximum value in gradients
+        if parser_args.debug:
+            if quantnet.grad: print ("subnetconv fwd quantnet grad ", torch.max(quantnet.grad))
+        #print("in conv prune_threshold =", self.prune_threshold)
+        # Get binary mask and gain term for subnetwork
+        quantnet = GetGlobalSubnet.apply(self.clamped_scores, self.weight, self.prune_threshold)
+        #quantnet = GetQuantnet_binary.apply(self.clamped_scores, self.weight, self.prune_rate)
+        # Binarize weights by taking sign, multiply by pruning mask and gain term (alpha)
+        w = torch.sign(self.weight) * quantnet
+        #print("w =", w)
+        # Pass binary subnetwork weights to convolution layer
+        x = F.conv2d(
+            x, w, self.bias, self.stride, self.padding, self.dilation, self.groups
+        )
+        # Return output from convolution layer
+        return x
+
+
 """
 Sample Based Sparsification
 """
