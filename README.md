@@ -14,6 +14,35 @@ More extensive details and motivation can be found in our ICLR 2021 paper:
 
 This implementation of **biprop** was built on top of the [**hidden-networks**](https://github.com/allenai/hidden-networks) repository from the Allen Institute for AI. 
 
+## Global Pruning and Data Augmentation Update (Feb 10, 2022): 
+The following updates have been added to biprop to reflect several implementation details that were developed for our NeurIPS 2021 paper [**A Winning Hand: Compressing Deep Networks Can Improve Out-Of-Distribution Robustness**](https://openreview.net/forum?id=YygA0yppTR)
+
+### Global Pruning
+The original implementation of biprop pruned the network in a layerwise fashion, that is, the fraction of unpruned parameters in each layer was equal to the `prune_rate` argument. This update includes an option to prune the network globally, that is, the fraction of unpruned parameters globally is equal to the `prune_rate` argument however the fraction of unpruned weights in each layer is not constrained to be equal to `prune_rate`. Our experiments in [**A Winning Hand**](https://arxiv.org/abs/2106.09129) *(see Figure 5 in Appendix C)* illustrate that globally pruned networks are capable of achieving higher accuracy at higher sparsity levels when compared to layerwise pruned models.  
+
+- Global pruning can be accomplished by adding the flag `--conv-type GlobalSubnetConv` to any new training run. 
+
+- Note that for models pruned at 50% sparsity or higher, the `prune_rate` is updated using a progressive scheduler to avoid layer collapse (i.e., when an entire layer is pruned). By default, this scheduler will reach the full sparsity at 10 epochs but this number of epochs can be specified by the user with the flag `--prune_rate_epoch`. 
+
+### Data Augmentation
+The *Augmix* and *Gaussian* data augmentation schemes utilized in [**A Winning Hand**](https://arxiv.org/abs/2106.09129) have been added to this implementation of biprop for public use and experimentation. 
+
+**Augmix**: We incorporated the [official Augmix repo](https://github.com/google-research/augmix) implementation of Augmix. The following arguments were added to facilitate the use of Augmix with biprop:
+- Use `--augmix` when training to use Augmix.
+- Use `--jsd` when training with Augmix to add the Jensen-Shannon divergence term to the loss function.
+- Use `--mixture-width` to set the number of augmentation chains to mix per augmented example. By default, this value is 3.
+- Use `--mixture-depth` to set the depth of augmentation chains. -1 denotes stochastic depth in [1, 3]. By default, this value is -1.
+- Use `--aug-severity` to set the severity of base augmentation operators. By default, this value is 3. 
+
+**Gaussian**: The Gaussian implementation randomly adds gaussian noise to training images. The following arguments were added to control the standard deviation and probability of noise being added to images:
+- Use `--gaussian_aug` when training to using this gaussian data augmentation method.
+- Use `--std_gauss` to set the variance of the sampled gaussian noise. By default, this value is 0.1.
+- Use `--p_clean` to set the probability that an image is clean (i.e., gaussian noise is **not** added to image). By default this value is 1 (all images will be clean).
+
+### A note on loading pretrained models
+From this version forward, all saved models now include fields containing the `conv_type`, `prune_rate`, and arguments relating to Augmix and Gaussian data augmentation schemes. The `conv_type` and `prune_rate` flags allow pretrained models to be properly loaded without requiring additional user flags. However, when loading pretrained models trained prior to this update a warning will be raised indicating that the `conv_type` and `prune_rate` should be specified to ensure proper loading of the model. Additionally, we include a `train_augmentation` field to enable the user to perform a quick check of which augmentation scheme was used during training. Additional augmentation settings (e.g. `p_clean` and `jsd`) are also included in the saved model file so that this information is preserved with the model and not just in the auxiliary `settings.txt` file.
+
+
 ## Setup
 
 ### Quick Setup

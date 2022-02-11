@@ -290,7 +290,7 @@ def parse_arguments():
     )
     parser.add_argument("--gaussian_aug", action="store_true", default=False, help="Gaussian noise augmentation to be added to the images")
     parser.add_argument("--std_gauss", help="Variance of sampled Gaussian noise for augmentation scheme", default=0.1, type=float)
-    parser.add_argument("--p_clean", help="Fraction of clean data in gaussian augmentation scheme", default=1.0, type=float)
+    parser.add_argument("--p_clean", help="Probability that image is clean (i.e. noise is not added to image in gaussian augmentation scheme)", default=1.0, type=float)
     parser.add_argument("--augmix", action="store_true", default=False, help="Use Augmix during training")
     parser.add_argument(
         "--jsd", action="store_true", default=False, help="Use Jensen-Shannon Divergence in loss with Augmix/Gaussian augmentation schemes"
