@@ -2,6 +2,7 @@ import os
 import pathlib
 import random
 import time
+import pickle
 
 from torch.utils.tensorboard import SummaryWriter
 import torch
@@ -289,7 +290,11 @@ def main_worker(args):
 
     # Finalize prune rate for globally pruned networks
     if args.conv_type == "GlobalSubnetConv":
-      global_pr = global_prune_rate(model, args)
+      global_pr, prune_dict = global_prune_rate(model, args)
+      # Save prune rate dictionary to file in checkpoint directory
+      dict_filename=f"{ckpt_base_dir}/global_prune_rate_dictionary.pkl"
+      with open(dict_filename, 'wb') as f:
+        pickle.dump(prune_dict, f)
     else:
       # For layerwise pruning, global prune rate is layer prune rate
       global_pr = args.prune_rate
@@ -575,6 +580,8 @@ def write_result_to_csv(**kwargs):
 
 # Compute global prune rate at end of training
 def global_prune_rate(model, args):
+    # Initialize dictionary to store prune rates for each layer
+    prune_dict = {}
     # Print breakdown of prune rate by layer
     print("\n==> Final layerwise prune rates in network:")
     # Loop over all model parameters and compute percentage of weights pruned globally
@@ -598,6 +605,8 @@ def global_prune_rate(model, args):
         # Compute number of pruned weights
         print("%s prune percentage: %lg" %(n,100*layer_prune_rate))
         unpruned_weights += layer_unpruned
+        # Add prune_rate for current layer to dictionary
+        prune_dict[n] = 100*layer_prune_rate
         # Set prune threshold value (same for all layers)
         pr_thresh = m.prune_threshold
 
@@ -611,7 +620,7 @@ def global_prune_rate(model, args):
     #print("\n==> Final prune threshold value: ", pr_thresh)
 
     # Return global prune rate
-    return (1-final_prune_rate)
+    return (1-final_prune_rate), prune_dict
 
 
 
